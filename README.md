@@ -1,4 +1,4 @@
-# GetPrompt — Full Stack Prompt Marketplace
+# GetPrompt 
 
 A modern prompt marketplace for AI tools built with React, Vite, Express, Prisma, and Tailwind CSS.
 
