@@ -110,14 +110,43 @@ return (
       {/* Bottom Bar */}
       <div className="pt-8 border-t">
         <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
-          <p className="text-sm text-muted-foreground flex items-center gap-1">
-            Made with{" "}
-            <Heart className="h-4 w-4 text-destructive fill-destructive inline-block" /> by
-            the GetPrompt community
+          <p className="text-sm text-muted-foreground flex items-center gap-2">
+        Made with
+        <motion.span
+          whileHover={{ scale: 1.08, rotate: [0, -8, 0] }}
+          transition={{ duration: 0.28 }}
+          className="inline-flex items-center"
+          aria-hidden="true"
+        >
+          <Heart className="h-4 w-4 text-destructive fill-destructive" />
+        </motion.span>
+        <span className="sr-only">love</span>
+        <span className="ml-1">by the</span>
+        <Link to="/" className="ml-1 font-medium hover:underline">
+          GetPrompt Team
+        </Link>
           </p>
-          <p className="text-xs text-muted-foreground">
-            © {currentYear} GetPrompt. All rights reserved.
-          </p>
+
+          <div className="flex items-center gap-6">
+        <nav aria-label="Footer links">
+          <ul className="flex items-center gap-4 text-xs text-muted-foreground">
+            <li>
+          <Link to="/privacy" className="hover:text-primary transition-smooth">
+            Privacy
+          </Link>
+            </li>
+            <li>
+          <Link to="/terms" className="hover:text-primary transition-smooth">
+            Terms
+          </Link>
+            </li>
+          </ul>
+        </nav>
+
+        <p className="text-xs text-muted-foreground">
+          © {currentYear} GetPrompt. All rights reserved.
+        </p>
+          </div>
         </div>
       </div>
     </div>

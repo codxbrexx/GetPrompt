@@ -13,7 +13,7 @@ model Prompt {
   description String
   content     String
   category    String   @default("text")
-  tags        String   // SQLite doesn't support arrays, use JSON string
+  tags        String   // SQLite uses JSON string for arrays
   votes       Int      @default(0)
   author      String   @default("Anonymous")
   createdAt   DateTime @default(now())

@@ -15,7 +15,7 @@ export const TagFilters = ({
   onClearTags,
 }: TagFiltersProps) => {
   return (
-    <section className="border-b bg-muted/30">
+    <section className="border-b bg-muted/2">
       <div className="container py-3 md:py-4">
         <motion.div
           initial={{ opacity: 0 }}
