@@ -2,6 +2,10 @@
   "name": "prompt-hub",
   "version": "1.0.0",
   "private": true,
+  "packageManager": "npm@9.8.1",
+  "workspaces": [
+    "apps/*"
+  ],
   "main": "index.js",
   "scripts": {
     "test": "echo \"No root tests configured\" && exit 0",
