@@ -14,7 +14,7 @@ beforeAll(async () => {
       title: 'vote test',
       description: 'for voting',
       content: 'Test prompt content for voting',
-      tags: ['test'],
+      tags: JSON.stringify(['test']),
       votes: 0,
     },
   })
