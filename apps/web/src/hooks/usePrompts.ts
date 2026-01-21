@@ -1,66 +1,81 @@
-import { useState, useMemo, useEffect } from "react";
-import { mockPrompts } from "@/lib/mockData";
+import { useState, useMemo, useEffect, useCallback } from "react";
+import { mockPrompts, allTags } from "@/lib/mockData";
 import { Prompt, PromptCategory } from "@/types/prompt";
+import { useDebounce } from "./useDebounce";
+
+const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:4000";
 
 export const usePrompts = () => {
-  const [prompts, setPrompts] = useState<Prompt[]>(() => {
-    try {
-      const userPrompts = localStorage.getItem("user_prompts");
-      const parsedUserPrompts = userPrompts ? JSON.parse(userPrompts) : [];
-      return [...parsedUserPrompts, ...mockPrompts];
-    } catch (error) {
-      return mockPrompts;
-    }
-  });
-
+  const [prompts, setPrompts] = useState<Prompt[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<PromptCategory | "all">("all");
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  // Debounce search query (300ms)
+  const debouncedSearch = useDebounce(searchQuery, 300);
 
   const isSearching = searchQuery.trim().length > 0;
 
-  // Reload prompts when localStorage changes
-  useEffect(() => {
-    const reloadPrompts = () => {
-      try {
-        const userPrompts = localStorage.getItem("user_prompts");
-        const parsedUserPrompts = userPrompts ? JSON.parse(userPrompts) : [];
-        setPrompts([...parsedUserPrompts, ...mockPrompts]);
-      } catch (error) {
-        setPrompts(mockPrompts);
+  // Fetch prompts from API
+  const fetchPrompts = useCallback(async (search: string, tags: string[]) => {
+    setLoading(true);
+    setError(null);
+
+    try {
+      const params = new URLSearchParams();
+      if (search.trim()) {
+        params.set("search", search.trim());
       }
-    };
+      if (tags.length > 0) {
+        params.set("tags", tags.join(","));
+      }
 
-    window.addEventListener("storage", reloadPrompts);
-    window.addEventListener("focus", reloadPrompts);
+      const url = `${API_BASE}/api/prompts${params.toString() ? `?${params.toString()}` : ""}`;
+      const response = await fetch(url);
 
-    return () => {
-      window.removeEventListener("storage", reloadPrompts);
-      window.removeEventListener("focus", reloadPrompts);
-    };
+      if (!response.ok) {
+        throw new Error("Failed to fetch prompts");
+      }
+
+      const data = await response.json();
+      setPrompts(data);
+    } catch (err) {
+      console.error("Failed to fetch prompts:", err);
+      setError("Failed to load prompts. Using local data.");
+      // Fallback to mock data with local filtering
+      const filtered = mockPrompts.filter((prompt) => {
+        const matchesSearch =
+          !search.trim() ||
+          prompt.title.toLowerCase().includes(search.toLowerCase()) ||
+          prompt.description.toLowerCase().includes(search.toLowerCase()) ||
+          prompt.tags.some((tag) => tag.toLowerCase().includes(search.toLowerCase()));
+
+        const matchesTags =
+          tags.length === 0 ||
+          tags.some((tag) => prompt.tags.includes(tag));
+
+        return matchesSearch && matchesTags;
+      });
+      setPrompts(filtered);
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
+  // Fetch prompts when debounced search or tags change
+  useEffect(() => {
+    fetchPrompts(debouncedSearch, selectedTags);
+  }, [debouncedSearch, selectedTags, fetchPrompts]);
+
+  // Filter by category locally (API doesn't support category filter yet)
   const filteredPrompts = useMemo(() => {
-    return prompts.filter((prompt) => {
-      const matchesSearch =
-        searchQuery === "" ||
-        prompt.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        prompt.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        prompt.tags.some((tag) =>
-          tag.toLowerCase().includes(searchQuery.toLowerCase())
-        );
-
-      const matchesTags =
-        selectedTags.length === 0 ||
-        selectedTags.some((tag) => prompt.tags.includes(tag));
-
-      const matchesCategory =
-        selectedCategory === "all" || prompt.category === selectedCategory;
-
-      return matchesSearch && matchesTags && matchesCategory;
-    });
-  }, [prompts, searchQuery, selectedTags, selectedCategory]);
+    if (selectedCategory === "all") {
+      return prompts;
+    }
+    return prompts.filter((prompt) => prompt.category === selectedCategory);
+  }, [prompts, selectedCategory]);
 
   const stats = useMemo(() => {
     const totalVotes = prompts.reduce((sum, p) => sum + p.votes, 0);
@@ -89,41 +104,45 @@ export const usePrompts = () => {
     setSearchQuery(value);
   };
 
-  const handleVote = (id: string, direction: "up" | "down") => {
-    setPrompts((prevPrompts) => {
-      const updatedPrompts = prevPrompts.map((prompt) => {
-        if (prompt.id === id) {
-          return {
-            ...prompt,
-            votes: direction === "up" ? prompt.votes + 1 : prompt.votes - 1,
-          };
-        }
-        return prompt;
+  const handleVote = async (id: string, direction: "up" | "down") => {
+    const delta = direction === "up" ? 1 : -1;
+
+    // Optimistic update
+    setPrompts((prevPrompts) =>
+      prevPrompts.map((prompt) =>
+        prompt.id === id
+          ? { ...prompt, votes: prompt.votes + delta }
+          : prompt
+      )
+    );
+
+    try {
+      const response = await fetch(`${API_BASE}/api/prompts/${id}/vote`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ delta }),
       });
 
-      // Update localStorage for user prompts
-      try {
-        const userPrompts = localStorage.getItem("user_prompts");
-        if (userPrompts) {
-          const parsedUserPrompts = JSON.parse(userPrompts);
-          const updatedUserPrompts = parsedUserPrompts.map((prompt: Prompt) => {
-            if (prompt.id === id) {
-              return {
-                ...prompt,
-                votes: direction === "up" ? prompt.votes + 1 : prompt.votes - 1,
-              };
-            }
-            return prompt;
-          });
-          localStorage.setItem("user_prompts", JSON.stringify(updatedUserPrompts));
-        }
-      } catch (error) {
-        console.error("Failed to update votes in localStorage", error);
+      if (!response.ok) {
+        throw new Error("Vote failed");
       }
-
-      return updatedPrompts;
-    });
+    } catch (err) {
+      console.error("Failed to vote:", err);
+      // Revert optimistic update on error
+      setPrompts((prevPrompts) =>
+        prevPrompts.map((prompt) =>
+          prompt.id === id
+            ? { ...prompt, votes: prompt.votes - delta }
+            : prompt
+        )
+      );
+    }
   };
+
+  // Get available tags from current prompts or use all tags
+  const availableTags = useMemo(() => {
+    return allTags;
+  }, []);
 
   return {
     prompts,
@@ -132,8 +151,10 @@ export const usePrompts = () => {
     selectedTags,
     selectedCategory,
     loading,
+    error,
     isSearching,
     stats,
+    availableTags,
     setSearchQuery: handleSearchChange,
     setSelectedCategory,
     toggleTag,

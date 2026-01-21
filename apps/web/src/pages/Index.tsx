@@ -5,6 +5,7 @@ import { SearchSection } from "@/components/home/SearchSection";
 import { CategoryFilters } from "@/components/home/CategoryFilters";
 import { TagFilters } from "@/components/home/TagFilters";
 import { PromptsGrid } from "@/components/home/PromptsGrid";
+import { ActiveFilters } from "@/components/home/ActiveFilters";
 import { usePrompts } from "@/hooks/usePrompts";
 
 const Index = () => {
@@ -14,6 +15,7 @@ const Index = () => {
     selectedTags,
     selectedCategory,
     isSearching,
+    loading,
     stats,
     setSearchQuery,
     setSelectedCategory,
@@ -42,22 +44,34 @@ const Index = () => {
           isSearching={isSearching}
         />
 
-        {/* Category Filters - Hidden when searching */}
-        {!isSearching && (
-          <CategoryFilters
+        {/* Active Filters Display */}
+        {hasActiveFilters && (
+          <ActiveFilters
+            searchQuery={searchQuery}
+            selectedTags={selectedTags}
             selectedCategory={selectedCategory}
-            onCategoryChange={setSelectedCategory}
+            onRemoveSearch={() => setSearchQuery("")}
+            onRemoveTag={toggleTag}
+            onRemoveCategory={() => setSelectedCategory("all")}
+            onClearAll={clearFilters}
           />
         )}
 
-        {/* Tag Filters - Hidden when searching */}
-        {!isSearching && (
-          <TagFilters
-            selectedTags={selectedTags}
-            onTagToggle={toggleTag}
-            onClearTags={() => clearFilters()}
-          />
-        )}
+        {/* Category Filters */}
+        <CategoryFilters
+          selectedCategory={selectedCategory}
+          onCategoryChange={setSelectedCategory}
+        />
+
+        {/* Tag Filters - Now visible during search too */}
+        <TagFilters
+          selectedTags={selectedTags}
+          onTagToggle={toggleTag}
+          onClearTags={() => {
+            // Only clear tags, not all filters
+            selectedTags.forEach(toggleTag);
+          }}
+        />
 
         {/* Prompts Grid */}
         <PromptsGrid
@@ -67,6 +81,7 @@ const Index = () => {
           onClearFilters={clearFilters}
           onVote={handleVote}
           hasActiveFilters={hasActiveFilters}
+          loading={loading}
         />
       </main>
 

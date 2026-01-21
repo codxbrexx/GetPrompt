@@ -1,8 +1,9 @@
 import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { PromptCard } from "@/components/PromptCard";
+import { SkeletonCard } from "@/components/SkeletonCard";
 import { Prompt } from "@/types/prompt";
-import { Sparkles, SearchX } from "lucide-react";
+import { Sparkles, SearchX, Loader2 } from "lucide-react";
 
 interface PromptsGridProps {
   filteredPrompts: Prompt[];
@@ -11,6 +12,7 @@ interface PromptsGridProps {
   onClearFilters: () => void;
   onVote: (id: string, direction: "up" | "down") => void;
   hasActiveFilters: boolean;
+  loading?: boolean;
 }
 
 export const PromptsGrid = ({
@@ -20,6 +22,7 @@ export const PromptsGrid = ({
   onClearFilters,
   onVote,
   hasActiveFilters,
+  loading = false,
 }: PromptsGridProps) => {
   const getTitle = () => {
     if (isSearching) return "Search Results";
@@ -33,9 +36,8 @@ export const PromptsGrid = ({
         ? `No prompts found for "${searchQuery}"`
         : "No prompts found. Try adjusting your filters.";
     }
-    return `Showing ${filteredPrompts.length} prompt${
-      filteredPrompts.length !== 1 ? "s" : ""
-    }`;
+    return `Showing ${filteredPrompts.length} prompt${filteredPrompts.length !== 1 ? "s" : ""
+      }`;
   };
 
   return (
@@ -48,7 +50,10 @@ export const PromptsGrid = ({
       >
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
-            <h2 className="text-3xl font-bold mb-2">{getTitle()}</h2>
+            <h2 className="text-3xl font-bold mb-2 flex items-center gap-2">
+              {getTitle()}
+              {loading && <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />}
+            </h2>
             <p className="text-sm text-muted-foreground">{getDescription()}</p>
           </div>
 
@@ -64,7 +69,15 @@ export const PromptsGrid = ({
           )}
         </div>
 
-        {filteredPrompts.length === 0 && (
+        {loading && (
+          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+            {[...Array(6)].map((_, i) => (
+              <SkeletonCard key={i} />
+            ))}
+          </div>
+        )}
+
+        {!loading && filteredPrompts.length === 0 && (
           <motion.div
             initial={{ opacity: 0, scale: 0.9 }}
             animate={{ opacity: 1, scale: 1 }}
@@ -86,7 +99,7 @@ export const PromptsGrid = ({
           </motion.div>
         )}
 
-        {filteredPrompts.length > 0 && (
+        {!loading && filteredPrompts.length > 0 && (
           <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
             {filteredPrompts.map((prompt, index) => (
               <PromptCard

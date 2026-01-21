@@ -40,43 +40,80 @@ app.get('/api/health', (req, res) => {
 })
 
 app.get("/api/prompts", async (req, res) => {
+  const { search, tags } = req.query;
+  const tagList = tags ? String(tags).split(',').filter(Boolean) : [];
+  const hasFilters = search || tagList.length > 0;
+
   try {
-    if (redisAvailable) {
-      try {
-        const cache = await redis.get("prompts");
-        if (cache) return res.json(JSON.parse(cache));
-      } catch (err) {
-        redisAvailable = false
-        console.warn('Redis get failed, falling back to DB:', err.message)
+    // Only use cache when no filters are applied
+    if (!hasFilters) {
+      if (redisAvailable) {
+        try {
+          const cache = await redis.get("prompts");
+          if (cache) return res.json(JSON.parse(cache));
+        } catch (err) {
+          redisAvailable = false
+          console.warn('Redis get failed, falling back to DB:', err.message)
+        }
+      }
+
+      // If redis not available, return in-memory cache when fresh
+      if (!redisAvailable && inMemoryCache && (Date.now() - inMemoryCacheAt) < IN_MEMORY_TTL) {
+        return res.json(inMemoryCache)
       }
     }
 
-    // If redis not available, return in-memory cache when fresh
-    if (!redisAvailable && inMemoryCache && (Date.now() - inMemoryCacheAt) < IN_MEMORY_TTL) {
-      return res.json(inMemoryCache)
+    // Build where clause for search filtering
+    let whereClause = {};
+    if (search) {
+      const searchTerm = String(search).toLowerCase();
+      whereClause.OR = [
+        { title: { contains: searchTerm } },
+        { description: { contains: searchTerm } }
+      ];
     }
 
     const prompts = await prisma.prompt.findMany({
+      where: Object.keys(whereClause).length > 0 ? whereClause : undefined,
       orderBy: { createdAt: 'desc' }
     });
 
     // Parse tags from JSON string (SQLite compatibility)
-    const formattedPrompts = prompts.map(p => ({
+    let formattedPrompts = prompts.map(p => ({
       ...p,
       tags: typeof p.tags === 'string' ? JSON.parse(p.tags) : p.tags
-    }))
+    }));
 
-    // Update caches
-    if (redisAvailable) {
-      try {
-        await redis.set("prompts", JSON.stringify(formattedPrompts), "EX", 60);
-      } catch (err) {
-        redisAvailable = false
-        console.warn('Redis set failed:', err.message)
+    // Filter by tags in-memory (SQLite stores tags as JSON string)
+    if (tagList.length > 0) {
+      formattedPrompts = formattedPrompts.filter(p => 
+        tagList.some(t => p.tags.includes(t))
+      );
+    }
+
+    // Also filter by search term in tags (since Prisma can't search JSON array)
+    if (search) {
+      const searchTerm = String(search).toLowerCase();
+      formattedPrompts = formattedPrompts.filter(p =>
+        p.title.toLowerCase().includes(searchTerm) ||
+        p.description.toLowerCase().includes(searchTerm) ||
+        p.tags.some(tag => tag.toLowerCase().includes(searchTerm))
+      );
+    }
+
+    // Update caches only when no filters
+    if (!hasFilters) {
+      if (redisAvailable) {
+        try {
+          await redis.set("prompts", JSON.stringify(formattedPrompts), "EX", 60);
+        } catch (err) {
+          redisAvailable = false
+          console.warn('Redis set failed:', err.message)
+        }
+      } else {
+        inMemoryCache = formattedPrompts
+        inMemoryCacheAt = Date.now()
       }
-    } else {
-      inMemoryCache = formattedPrompts
-      inMemoryCacheAt = Date.now()
     }
 
     res.json(formattedPrompts);
