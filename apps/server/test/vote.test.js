@@ -13,6 +13,7 @@ beforeAll(async () => {
     data: {
       title: 'vote test',
       description: 'for voting',
+      content: 'Test prompt content for voting',
       tags: ['test'],
       votes: 0,
     },
